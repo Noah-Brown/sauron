@@ -1,0 +1,29 @@
+{
+  "name": "sauron",
+  "version": "1.0.0",
+  "description": "Daily analytics & DevOps reporter",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "run-now": "tsx src/index.ts --run-now",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.19.9",
+    "better-sqlite3": "^12.6.2",
+    "dotenv": "^17.3.1",
+    "google-auth-library": "^10.6.1",
+    "hono": "^4.12.3",
+    "node-cron": "^4.2.1",
+    "resend": "^6.9.3",
+    "tsx": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^25.3.3",
+    "@types/node-cron": "^3.0.11",
+    "typescript": "^5.9.3"
+  }
+}
