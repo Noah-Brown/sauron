@@ -17,47 +17,52 @@ export const posthogCollector: Collector = {
 
     if (!apiKey) return { collector: "posthog", site: site.id, success: false, message: "No PostHog API key" };
 
-    // Query events count for the date
-    const eventsRes = await fetch(`${host}/api/projects/${projectId}/insights/trend/`, {
+    const queryUrl = `${host}/api/projects/${projectId}/query/`;
+    const queryHeaders = {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    };
+
+    // Query events count for the date using the HogQL Query API
+    // (replaces the deprecated /api/projects/{id}/insights/trend/ endpoint)
+    const eventsRes = await fetch(queryUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: queryHeaders,
       body: JSON.stringify({
-        events: [{ id: "$pageview", type: "events", math: "total" }],
-        date_from: date,
-        date_to: date,
+        query: {
+          kind: "HogQLQuery",
+          query: `SELECT count() FROM events WHERE event = '$pageview' AND toDate(timestamp) = '${date}'`,
+        },
       }),
     });
 
     if (!eventsRes.ok) throw new Error(`PostHog API: ${eventsRes.status} ${await eventsRes.text()}`);
 
     const eventsJson = (await eventsRes.json()) as {
-      result?: Array<{ data: number[] }>;
+      results?: Array<[number]>;
     };
 
-    const events = eventsJson.result?.[0]?.data?.[0] ?? 0;
+    const events = eventsJson.results?.[0]?.[0] ?? 0;
 
-    // Query unique persons
-    const personsRes = await fetch(`${host}/api/projects/${projectId}/insights/trend/`, {
+    // Query unique persons (DAU) for the date
+    const personsRes = await fetch(queryUrl, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: queryHeaders,
       body: JSON.stringify({
-        events: [{ id: "$pageview", type: "events", math: "dau" }],
-        date_from: date,
-        date_to: date,
+        query: {
+          kind: "HogQLQuery",
+          query: `SELECT count(DISTINCT distinct_id) FROM events WHERE event = '$pageview' AND toDate(timestamp) = '${date}'`,
+        },
       }),
     });
 
+    if (!personsRes.ok) throw new Error(`PostHog API (persons): ${personsRes.status} ${await personsRes.text()}`);
+
     const personsJson = (await personsRes.json()) as {
-      result?: Array<{ data: number[] }>;
+      results?: Array<[number]>;
     };
 
-    const persons = personsJson.result?.[0]?.data?.[0] ?? 0;
+    const persons = personsJson.results?.[0]?.[0] ?? 0;
 
     db.prepare(`
       INSERT INTO posthog_stats (date, site_id, events, persons, sessions)

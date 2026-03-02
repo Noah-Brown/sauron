@@ -1,16 +1,18 @@
 import { GoogleAuth } from "google-auth-library";
 import type { AppConfig } from "../../config.js";
 
-let authClient: GoogleAuth | null = null;
+const authClients = new Map<string, GoogleAuth>();
 
 export function getGoogleAuth(config: AppConfig, scopes: string[]): GoogleAuth {
-  if (authClient) return authClient;
+  const key = scopes.sort().join(",");
+  const existing = authClients.get(key);
+  if (existing) return existing;
 
   if (!config.googleServiceAccountEmail || !config.googleServiceAccountKey) {
     throw new Error("Google service account credentials not configured");
   }
 
-  authClient = new GoogleAuth({
+  const auth = new GoogleAuth({
     credentials: {
       client_email: config.googleServiceAccountEmail,
       private_key: config.googleServiceAccountKey.replace(/\\n/g, "\n"),
@@ -18,7 +20,8 @@ export function getGoogleAuth(config: AppConfig, scopes: string[]): GoogleAuth {
     scopes,
   });
 
-  return authClient;
+  authClients.set(key, auth);
+  return auth;
 }
 
 export async function getGoogleAccessToken(config: AppConfig, scopes: string[]): Promise<string> {

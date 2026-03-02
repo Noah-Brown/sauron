@@ -20,7 +20,7 @@ export interface SiteConfig {
   googleSearchConsole?: { siteUrl: string; };
   posthog?: { projectId: string; };
   github?: { repo: string; }; // "owner/repo"
-  digitalocean?: { appId: string; };
+  digitalocean?: { dropletId: string; };
   eas?: { projectId: string; };
   resend?: { audienceId?: string; };
 }

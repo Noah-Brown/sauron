@@ -2,6 +2,36 @@ import type Database from "better-sqlite3";
 import type { SiteConfig } from "../../config.js";
 import type { Collector, CollectorConfig, CollectorResult } from "./types.js";
 
+const GRAPHQL_URL = "https://api.expo.dev/graphql";
+
+const BUILDS_QUERY = `
+  query ViewBuildsOnApp($appId: String!, $offset: Int!, $limit: Int!) {
+    app {
+      byId(appId: $appId) {
+        builds(offset: $offset, limit: $limit) {
+          id
+          status
+          platform
+          createdAt
+        }
+      }
+    }
+  }
+`;
+
+const UPDATES_QUERY = `
+  query ViewUpdateGroupsOnApp($appId: String!, $offset: Int!, $limit: Int!) {
+    app {
+      byId(appId: $appId) {
+        updateGroups(limit: $limit, offset: $offset) {
+          id
+          createdAt
+        }
+      }
+    }
+  }
+`;
+
 export const easCollector: Collector = {
   name: "eas",
 
@@ -21,39 +51,74 @@ export const easCollector: Collector = {
       "Content-Type": "application/json",
     };
 
-    // Fetch builds for the project
-    const buildsRes = await fetch(
-      `https://api.expo.dev/v2/projects/${projectId}/builds?limit=50`,
-      { headers }
-    );
+    // Fetch builds via GraphQL
+    const buildsRes = await fetch(GRAPHQL_URL, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: BUILDS_QUERY,
+        variables: { appId: projectId, offset: 0, limit: 50 },
+      }),
+    });
 
     if (!buildsRes.ok) throw new Error(`EAS API: ${buildsRes.status} ${await buildsRes.text()}`);
 
     const buildsJson = (await buildsRes.json()) as {
-      data?: Array<{
-        id: string;
-        createdAt: string;
-        status: string;
-        platform: string;
-      }>;
+      data?: {
+        app?: {
+          byId?: {
+            builds?: Array<{
+              id: string;
+              status: string;
+              platform: string;
+              createdAt: string;
+            }>;
+          };
+        };
+      };
+      errors?: Array<{ message: string }>;
     };
 
-    const builds = buildsJson.data ?? [];
+    if (buildsJson.errors?.length) {
+      throw new Error(`EAS GraphQL: ${buildsJson.errors.map((e) => e.message).join(", ")}`);
+    }
+
+    const builds = buildsJson.data?.app?.byId?.builds ?? [];
     const todayBuilds = builds.filter((b) => b.createdAt.startsWith(date));
     const lastBuild = builds[0];
 
-    // Fetch updates
-    const updatesRes = await fetch(
-      `https://api.expo.dev/v2/projects/${projectId}/updates?limit=50`,
-      { headers }
-    );
-
+    // Fetch updates via GraphQL
     let updatesToday = 0;
-    if (updatesRes.ok) {
-      const updatesJson = (await updatesRes.json()) as {
-        data?: Array<{ createdAt: string }>;
-      };
-      updatesToday = (updatesJson.data ?? []).filter((u) => u.createdAt.startsWith(date)).length;
+    try {
+      const updatesRes = await fetch(GRAPHQL_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: UPDATES_QUERY,
+          variables: { appId: projectId, offset: 0, limit: 50 },
+        }),
+      });
+
+      if (updatesRes.ok) {
+        const updatesJson = (await updatesRes.json()) as {
+          data?: {
+            app?: {
+              byId?: {
+                updateGroups?: Array<Array<{ createdAt: string }>>;
+              };
+            };
+          };
+        };
+        const groups = updatesJson.data?.app?.byId?.updateGroups ?? [];
+        // updateGroups is an array of arrays (grouped updates)
+        for (const group of groups) {
+          if (Array.isArray(group)) {
+            updatesToday += group.filter((u) => u.createdAt.startsWith(date)).length;
+          }
+        }
+      }
+    } catch {
+      // Updates query failed — not critical
     }
 
     db.prepare(`
