@@ -43,6 +43,8 @@ export interface AppConfig {
   resendToEmail: string;
   dashboardUrl: string;
   dbPath: string;
+  monitorSites: string[];
+  monitorIntervalMs: number;
 }
 
 export function loadConfig(): AppConfig {
@@ -65,8 +67,17 @@ export function loadConfig(): AppConfig {
     resendFromEmail: env("RESEND_FROM_EMAIL", "Sauron <reports@example.com>"),
     resendToEmail: env("RESEND_TO_EMAIL", "you@example.com"),
 
+    monitorSites: loadMonitorSites(),
+    monitorIntervalMs: parseInt(optEnv("MONITOR_INTERVAL_MS") ?? "600000", 10),
+
     sites: loadSites(),
   };
+}
+
+function loadMonitorSites(): string[] {
+  const val = optEnv("MONITOR_SITES");
+  if (val) return val.split(",").map((s) => s.trim()).filter(Boolean);
+  return ["https://pierrereview.com", "https://threadline.news"];
 }
 
 function loadSites(): SiteConfig[] {

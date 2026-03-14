@@ -5,6 +5,7 @@ import { createApp } from "./server/app.js";
 import { startScheduler } from "./scheduler.js";
 import { runCollection } from "./runner.js";
 import { sendReport } from "./email.js";
+import { startMonitor } from "./monitor.js";
 import { logger } from "./utils/logger.js";
 
 const config = loadConfig();
@@ -13,6 +14,9 @@ const app = createApp(config, db);
 
 // Start cron scheduler
 startScheduler(config, db);
+
+// Start uptime monitor
+startMonitor(config);
 
 // Check for --run-now flag
 if (process.argv.includes("--run-now")) {
